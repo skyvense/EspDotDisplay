@@ -54,6 +54,50 @@ get_current_date() {
     date '+%Y-%m-%d'
 }
 
+# 获取剩余内存（MB）
+get_memory_free() {
+    # 读取 /proc/meminfo 获取可用内存
+    local mem_free=$(awk '/MemFree:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null)
+    local mem_available=$(awk '/MemAvailable:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null)
+    
+    # 优先使用 MemAvailable，否则使用 MemFree
+    if [ -n "$mem_available" ] && [ "$mem_available" -gt 0 ]; then
+        echo "${mem_available}MB"
+    elif [ -n "$mem_free" ]; then
+        echo "${mem_free}MB"
+    else
+        echo "N/A"
+    fi
+}
+
+# 获取CPU使用率（百分比）
+get_cpu_usage() {
+    # 使用 top 命令获取 CPU 使用率
+    # OpenWrt 的 top 命令输出格式：CPU:  5% usr  2% sys  0% nic 93% idle
+    local cpu_line=$(top -bn1 | grep '^CPU:' 2>/dev/null | head -1)
+    
+    if [ -n "$cpu_line" ]; then
+        # 提取 idle 百分比（更精确的方法）
+        local idle=$(echo "$cpu_line" | awk '{for(i=1;i<=NF;i++) if($(i+1)=="idle") print $i}' | tr -d '%')
+        
+        if [ -n "$idle" ] && [ "$idle" -ge 0 ] 2>/dev/null; then
+            local usage=$((100 - idle))
+            echo "${usage}%"
+        else
+            echo "N/A"
+        fi
+    else
+        # 备选方案：读取 /proc/stat
+        # 注意：这个方法需要两次采样，但我们用单次采样估算
+        local cpu_info=$(awk '/^cpu / {user=$2; nice=$3; system=$4; idle=$5; total=user+nice+system+idle; if(total>0) print int((total-idle)*100/total); else print 0}' /proc/stat)
+        if [ -n "$cpu_info" ]; then
+            echo "${cpu_info}%"
+        else
+            echo "N/A"
+        fi
+    fi
+}
+
 # 测量ping延迟（毫秒）
 get_ping_latency() {
     local target=$1
@@ -71,21 +115,16 @@ get_ping_latency() {
 
 # 发送MQTT消息
 send_mqtt_message() {
-    local message=$1
+    local message="$1"
     
-    # 构建mosquitto_pub命令
-    local mqtt_cmd="mosquitto_pub -h $MQTT_BROKER -p $MQTT_PORT -t $MQTT_TOPIC -m \"$message\""
-    
-    # 如果配置了用户名密码
-    if [ -n "$MQTT_USER" ]; then
-        mqtt_cmd="$mqtt_cmd -u $MQTT_USER"
+    # 直接调用 mosquitto_pub（不使用 eval，避免空格被压缩）
+    if [ -n "$MQTT_USER" ] && [ -n "$MQTT_PASS" ]; then
+        mosquitto_pub -h "$MQTT_BROKER" -p "$MQTT_PORT" -t "$MQTT_TOPIC" -u "$MQTT_USER" -P "$MQTT_PASS" -m "$message" 2>/dev/null
+    elif [ -n "$MQTT_USER" ]; then
+        mosquitto_pub -h "$MQTT_BROKER" -p "$MQTT_PORT" -t "$MQTT_TOPIC" -u "$MQTT_USER" -m "$message" 2>/dev/null
+    else
+        mosquitto_pub -h "$MQTT_BROKER" -p "$MQTT_PORT" -t "$MQTT_TOPIC" -m "$message" 2>/dev/null
     fi
-    if [ -n "$MQTT_PASS" ]; then
-        mqtt_cmd="$mqtt_cmd -P $MQTT_PASS"
-    fi
-    
-    # 执行命令
-    eval $mqtt_cmd 2>/dev/null
     
     if [ $? -eq 0 ]; then
         return 0
@@ -111,16 +150,22 @@ main_loop() {
         # 获取当前时间
         local current_time=$(get_current_time)
         
-        # 获取ping延迟（每次都测量）
+        # 获取ping延迟
         local ping_latency=$(get_ping_latency "$PING_TARGET")
         
-        # 构建消息（使用|分隔两行）
-        local message="${current_time}|Ping: ${ping_latency}"
+        # 获取内存和CPU（可选：轮流显示以减少开销）
+        local mem_free=$(get_memory_free)
+        local cpu_usage=$(get_cpu_usage)
+        
+        # 构建消息（两行显示）
+        # 第一行：时间 + Ping（中间空两格）
+        # 第二行：内存 + CPU
+        local message="-${current_time}- -${ping_latency}-|Mem:${mem_free} CPU:${cpu_usage}"
         
         # 发送到MQTT
         if send_mqtt_message "$message"; then
             loop_count=$((loop_count + 1))
-            printf "\r[%04d] %s | %s      " "$loop_count" "$current_time" "$ping_latency"
+            printf "\r[%04d] %s | %s | %s | %s      " "$loop_count" "$current_time" "$ping_latency" "$mem_free" "$cpu_usage"
         else
             printf "\r[%04d] %s | Failed to send" "$loop_count" "$current_time"
         fi
