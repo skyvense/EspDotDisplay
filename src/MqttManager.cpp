@@ -246,14 +246,23 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             if (ch == '\n') {
                 Serial.printf("  Found newline at pos %d (after %d chars on line %d)\n", 
                               pos, charsPrinted, currentLine);
-                // 遇到换行符，无论当前行是否满，都移动到下一行
+                // 遇到换行符，需要换行
                 if (currentLine < maxLines - 1) {
+                    // 如果当前行未满，填充空格直到满行，让VFD自动换行
+                    if (charsPrinted < maxLineLength) {
+                        int spacesToAdd = maxLineLength - charsPrinted;
+                        Serial.printf("  Padding %d spaces to fill current line\n", spacesToAdd);
+                        for (int i = 0; i < spacesToAdd; i++) {
+                            vfd_->print(" ");
+                        }
+                        charsPrinted = maxLineLength;
+                    }
+                    // 现在行已满，VFD会自动换行，或者我们手动触发
                     currentLine++;
                     charsPrinted = 0;
-                    // 【尝试】行号可能从1开始，所以使用 currentLine+1
                     vfd_->setCursor(0, currentLine + 1);
                     delay(20);
-                    Serial.printf("  Explicitly moved to line %d using setCursor(0, %d) due to newline\n", currentLine, currentLine + 1);
+                    Serial.printf("  Moved to line %d using setCursor(0, %d) after padding\n", currentLine, currentLine + 1);
                 }
                 pos++;
                 continue;
