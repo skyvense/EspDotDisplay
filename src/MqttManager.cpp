@@ -201,15 +201,7 @@ void MqttManager::messageCallback(char* topic, byte* payload, unsigned int lengt
 
 void MqttManager::handleMessage(const String& topic, const String& message)
 {
-    Serial.printf("MQTT Message received - Topic: %s, Message: %s (len=%d)\n", 
-                  topic.c_str(), message.c_str(), message.length());
-    
-    // 调试：显示消息的十六进制表示
-    Serial.print("Message hex: ");
-    for (int i = 0; i < message.length() && i < 50; i++) {
-        Serial.printf("%02X ", (unsigned char)message[i]);
-    }
-    Serial.println();
+    Serial.printf("MQTT Message: [%s] %s\n", topic.c_str(), message.c_str());
     
     // 在VFD上显示消息
     if (vfd_ && vfd_->isInitialized()) {
@@ -230,8 +222,6 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             }
         }
         
-        Serial.printf("After processing: %d chars\n", displayMessage.length());
-        
         // 智能分行显示
         const int maxLineLength = 20;  // 每行最大字符数
         const int maxLines = 2;  // VFD最多显示行数
@@ -244,25 +234,20 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             
             // 检查是否遇到换行符
             if (ch == '\n') {
-                Serial.printf("  Found newline at pos %d (after %d chars on line %d)\n", 
-                              pos, charsPrinted, currentLine);
                 // 遇到换行符，需要换行
                 if (currentLine < maxLines - 1) {
                     // 如果当前行未满，填充空格直到满行，让VFD自动换行
                     if (charsPrinted < maxLineLength) {
-                        int spacesToAdd = maxLineLength - charsPrinted;
-                        Serial.printf("  Padding %d spaces to fill current line\n", spacesToAdd);
-                        for (int i = 0; i < spacesToAdd; i++) {
+                        for (int i = 0; i < maxLineLength - charsPrinted; i++) {
                             vfd_->print(" ");
                         }
                         charsPrinted = maxLineLength;
                     }
-                    // 现在行已满，VFD会自动换行，或者我们手动触发
+                    // 移动到下一行
                     currentLine++;
                     charsPrinted = 0;
                     vfd_->setCursor(0, currentLine + 1);
                     delay(20);
-                    Serial.printf("  Moved to line %d using setCursor(0, %d) after padding\n", currentLine, currentLine + 1);
                 }
                 pos++;
                 continue;
@@ -270,18 +255,14 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             
             // 检查当前行是否已满（在打印之前检查）
             if (charsPrinted >= maxLineLength) {
-                Serial.printf("  Line %d is full (%d chars), moving to next line\n", currentLine, charsPrinted);
                 // 当前行已满，自动移动到下一行
                 if (currentLine < maxLines - 1) {
                     currentLine++;
                     charsPrinted = 0;
-                    // 【尝试】行号可能从1开始
                     vfd_->setCursor(0, currentLine + 1);
                     delay(20);
-                    Serial.printf("  Auto moved to line %d using setCursor(0, %d)\n", currentLine, currentLine + 1);
                 } else {
                     // 已经是最后一行且已满，停止打印
-                    Serial.println("  Reached max lines and line is full, stopping");
                     break;
                 }
             }
@@ -289,24 +270,19 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             // 打印当前字符
             vfd_->print(String(ch));
             charsPrinted++;
-            Serial.printf("  Line %d, char %d: printed '%c' (0x%02X)\n", currentLine, charsPrinted - 1, ch, (unsigned char)ch);
             
-            // 【关键修复】打印完后立即检查是否刚好满20个字符
+            // 打印完后立即检查是否刚好满20个字符
             if (charsPrinted == maxLineLength && currentLine < maxLines - 1) {
-                // 刚好打印满一行，且还有下一行可用
-                // 立即使用setCursor移到下一行，防止VFD光标回卷
-                Serial.printf("  Just filled line %d (20 chars), immediately moving to next line\n", currentLine);
+                // 刚好打印满一行，立即移到下一行，防止VFD光标回卷
                 currentLine++;
                 charsPrinted = 0;
-                // 【尝试】行号可能从1开始
                 vfd_->setCursor(0, currentLine + 1);
                 delay(20);
-                Serial.printf("  Immediately moved to line %d using setCursor(0, %d)\n", currentLine, currentLine + 1);
             }
             
             pos++;
         }
         
-        Serial.printf("Message displayed on VFD (ended at line %d with %d chars)\n", currentLine, charsPrinted);
+        Serial.println("Message displayed on VFD");
     }
 }
