@@ -232,60 +232,72 @@ void MqttManager::handleMessage(const String& topic, const String& message)
         
         Serial.printf("After processing: %d chars\n", displayMessage.length());
         
-        // 按换行符分割并显示
-        int startPos = 0;
-        int lineCount = 0;
-        const int maxLines = 2;  // VFD最多显示行数
+        // 智能分行显示
         const int maxLineLength = 20;  // 每行最大字符数
+        const int maxLines = 2;  // VFD最多显示行数
+        int charsPrinted = 0;
+        int currentLine = 0;
+        int pos = 0;
         
-        while (startPos < displayMessage.length() && lineCount < maxLines) {
-            // 查找下一个换行符
-            int newlinePos = displayMessage.indexOf('\n', startPos);
+        while (pos < displayMessage.length() && currentLine < maxLines) {
+            char ch = displayMessage[pos];
             
-            Serial.printf("Line %d: startPos=%d, newlinePos=%d\n", lineCount, startPos, newlinePos);
-            
-            // 提取当前行
-            String line;
-            if (newlinePos == -1) {
-                // 没有找到换行符，取剩余所有内容
-                line = displayMessage.substring(startPos);
-            } else {
-                // 取到换行符之前的内容
-                line = displayMessage.substring(startPos, newlinePos);
+            // 检查是否遇到换行符
+            if (ch == '\n') {
+                Serial.printf("  Found newline at pos %d (after %d chars on line %d)\n", 
+                              pos, charsPrinted, currentLine);
+                // 遇到换行符，无论当前行是否满，都移动到下一行
+                if (currentLine < maxLines - 1) {
+                    currentLine++;
+                    charsPrinted = 0;
+                    // 【尝试】行号可能从1开始，所以使用 currentLine+1
+                    vfd_->setCursor(0, currentLine + 1);
+                    delay(20);
+                    Serial.printf("  Explicitly moved to line %d using setCursor(0, %d) due to newline\n", currentLine, currentLine + 1);
+                }
+                pos++;
+                continue;
             }
             
-            Serial.printf("  Line content: '%s' (len=%d)\n", line.c_str(), line.length());
-            
-            // 限制行长度
-            if (line.length() > maxLineLength) {
-                line = line.substring(0, maxLineLength);
+            // 检查当前行是否已满（在打印之前检查）
+            if (charsPrinted >= maxLineLength) {
+                Serial.printf("  Line %d is full (%d chars), moving to next line\n", currentLine, charsPrinted);
+                // 当前行已满，自动移动到下一行
+                if (currentLine < maxLines - 1) {
+                    currentLine++;
+                    charsPrinted = 0;
+                    // 【尝试】行号可能从1开始
+                    vfd_->setCursor(0, currentLine + 1);
+                    delay(20);
+                    Serial.printf("  Auto moved to line %d using setCursor(0, %d)\n", currentLine, currentLine + 1);
+                } else {
+                    // 已经是最后一行且已满，停止打印
+                    Serial.println("  Reached max lines and line is full, stopping");
+                    break;
+                }
             }
             
-            // 显示当前行
-            if (lineCount == 0) {
-                // 第一行：直接打印
-                vfd_->print(line);
-                Serial.printf("  Line 0: printed '%s'\n", line.c_str());
-            } else {
-                // 第二行：发送回车+换行，让光标到下一行行首
-                Serial.println("  Sending CR+LF (0x0D 0x0A)");
-                vfd_->print("\r\n");  // 回车+换行
+            // 打印当前字符
+            vfd_->print(String(ch));
+            charsPrinted++;
+            Serial.printf("  Line %d, char %d: printed '%c' (0x%02X)\n", currentLine, charsPrinted - 1, ch, (unsigned char)ch);
+            
+            // 【关键修复】打印完后立即检查是否刚好满20个字符
+            if (charsPrinted == maxLineLength && currentLine < maxLines - 1) {
+                // 刚好打印满一行，且还有下一行可用
+                // 立即使用setCursor移到下一行，防止VFD光标回卷
+                Serial.printf("  Just filled line %d (20 chars), immediately moving to next line\n", currentLine);
+                currentLine++;
+                charsPrinted = 0;
+                // 【尝试】行号可能从1开始
+                vfd_->setCursor(0, currentLine + 1);
                 delay(20);
-                vfd_->print(line);
-                Serial.printf("  Line %d: CR+LF + printed '%s'\n", lineCount, line.c_str());
+                Serial.printf("  Immediately moved to line %d using setCursor(0, %d)\n", currentLine, currentLine + 1);
             }
             
-            lineCount++;
-            
-            // 如果没有找到换行符，说明已经是最后的内容了
-            if (newlinePos == -1) {
-                break;
-            }
-            
-            // 移动到下一行的起始位置
-            startPos = newlinePos + 1;
+            pos++;
         }
         
-        Serial.printf("Message displayed on VFD (%d lines)\n", lineCount);
+        Serial.printf("Message displayed on VFD (ended at line %d with %d chars)\n", currentLine, charsPrinted);
     }
 }

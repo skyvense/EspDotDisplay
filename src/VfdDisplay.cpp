@@ -110,6 +110,7 @@ void VfdDisplay::setCursor(uint8_t x, uint8_t y)
 {
     if (!serial_) return;
     // US $ x y - 设置光标位置 (US = 0x1F)
+    // x: 列号 (0-19), y: 行号
     serial_->write(VFD_US);
     serial_->write('$');
     serial_->write(x);
