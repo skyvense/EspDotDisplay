@@ -205,14 +205,11 @@ void MqttManager::handleMessage(const String& topic, const String& message)
     
     // 在VFD上显示消息
     if (vfd_ && vfd_->isInitialized()) {
-        vfd_->clear();
-        delay(50);
+        // 静态变量：保存上次显示的内容
+        static String lastLine1 = "";
+        static String lastLine2 = "";
         
         // 处理消息中的换行符
-        // 支持的换行符格式：
-        // 1. 字符 '\n' (0x0A) - 真实的换行符
-        // 2. 字符 '|' (0x7C) - 竖线作为换行分隔符
-        
         String displayMessage = message;
         
         // 替换竖线为换行符
@@ -222,67 +219,61 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             }
         }
         
-        // 智能分行显示
-        const int maxLineLength = 20;  // 每行最大字符数
-        const int maxLines = 2;  // VFD最多显示行数
-        int charsPrinted = 0;
-        int currentLine = 0;
-        int pos = 0;
+        // 分割为两行（VFD每行20字符）
+        const int maxLineLength = 20;
+        String line1 = "";
+        String line2 = "";
         
-        while (pos < displayMessage.length() && currentLine < maxLines) {
-            char ch = displayMessage[pos];
-            
-            // 检查是否遇到换行符
-            if (ch == '\n') {
-                // 遇到换行符，需要换行
-                if (currentLine < maxLines - 1) {
-                    // 如果当前行未满，填充空格直到满行，让VFD自动换行
-                    if (charsPrinted < maxLineLength) {
-                        for (int i = 0; i < maxLineLength - charsPrinted; i++) {
-                            vfd_->print(" ");
-                        }
-                        charsPrinted = maxLineLength;
-                    }
-                    // 移动到下一行
-                    currentLine++;
-                    charsPrinted = 0;
-                    vfd_->setCursor(0, currentLine + 1);
-                    delay(20);
-                }
-                pos++;
-                continue;
+        int newlinePos = displayMessage.indexOf('\n');
+        if (newlinePos == -1) {
+            // 没有换行符，整个消息作为第一行（可能自动换行）
+            line1 = displayMessage.substring(0, min(maxLineLength, (int)displayMessage.length()));
+            if (displayMessage.length() > maxLineLength) {
+                line2 = displayMessage.substring(maxLineLength, min(maxLineLength * 2, (int)displayMessage.length()));
             }
-            
-            // 检查当前行是否已满（在打印之前检查）
-            if (charsPrinted >= maxLineLength) {
-                // 当前行已满，自动移动到下一行
-                if (currentLine < maxLines - 1) {
-                    currentLine++;
-                    charsPrinted = 0;
-                    vfd_->setCursor(0, currentLine + 1);
-                    delay(20);
-                } else {
-                    // 已经是最后一行且已满，停止打印
-                    break;
-                }
+        } else {
+            // 有换行符，分别处理两行
+            line1 = displayMessage.substring(0, min(newlinePos, maxLineLength));
+            if (newlinePos + 1 < displayMessage.length()) {
+                line2 = displayMessage.substring(newlinePos + 1, min(newlinePos + 1 + maxLineLength, (int)displayMessage.length()));
             }
-            
-            // 打印当前字符
-            vfd_->print(String(ch));
-            charsPrinted++;
-            
-            // 打印完后立即检查是否刚好满20个字符
-            if (charsPrinted == maxLineLength && currentLine < maxLines - 1) {
-                // 刚好打印满一行，立即移到下一行，防止VFD光标回卷
-                currentLine++;
-                charsPrinted = 0;
-                vfd_->setCursor(0, currentLine + 1);
-                delay(20);
-            }
-            
-            pos++;
         }
         
-        Serial.println("Message displayed on VFD");
+        // 补齐到maxLineLength字符（避免残留旧内容）
+        while (line1.length() < maxLineLength) {
+            line1 += " ";
+        }
+        while (line2.length() < maxLineLength) {
+            line2 += " ";
+        }
+        
+        // 只更新变化的行
+        bool needUpdate = false;
+        
+        // 检查第一行是否变化
+        if (line1 != lastLine1) {
+            Serial.println("Line 1 changed, updating...");
+            vfd_->setCursor(1, 1);  // VFD坐标从1开始：列1，行1
+            delay(10);
+            vfd_->print(line1);     // 打印整行
+            lastLine1 = line1;
+            needUpdate = true;
+        }
+        
+        // 检查第二行是否变化
+        if (line2 != lastLine2) {
+            Serial.println("Line 2 changed, updating...");
+            vfd_->setCursor(1, 2);  // VFD坐标从1开始：列1，行2
+            delay(10);
+            vfd_->print(line2);     // 打印整行
+            lastLine2 = line2;
+            needUpdate = true;
+        }
+        
+        if (needUpdate) {
+            Serial.println("Message updated on VFD");
+        } else {
+            Serial.println("Message unchanged, skipped update");
+        }
     }
 }
