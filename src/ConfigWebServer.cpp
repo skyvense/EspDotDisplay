@@ -309,8 +309,11 @@ void ConfigWebServer::handleSave()
     if (wifi_manager_->SaveConfig(config)) {
         server_->send(200, "text/html", getSuccessPage());
         
-        // 延迟后重启以应用新配置
-        delay(1000);
+        // 先让响应发完再重启：在 2 秒内反复处理连接，避免 TCP 未发完就重启
+        for (unsigned long t = millis(); millis() - t < 2000;) {
+            delay(10);
+            server_->handleClient();
+        }
         ESP.restart();
     } else {
         server_->send(500, "text/plain", "Failed to save configuration");

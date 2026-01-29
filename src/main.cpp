@@ -80,9 +80,10 @@ void loop() {
     bool wifiConnected = espWifi.WiFiWatchDog();
     
     static bool mqttConfigured = false;
+    static bool mqttConnected = false;  // 与 mqttConfigured 同层，WiFi 断开时需一起重置
     static bool ipDisplayed = false;
     static unsigned long lastUpdate = 0;
-    
+
     if (wifiConnected) {
         // WiFi已连接
         if (!ipDisplayed) {
@@ -123,7 +124,6 @@ void loop() {
         // 处理MQTT连接和消息
         if (mqttConfigured) {
             // 首次连接
-            static bool mqttConnected = false;
             if (!mqttConnected && mqttManager.isConnected() == false) {
                 if (mqttManager.connect()) {
                     mqttConnected = true;
@@ -164,6 +164,7 @@ void loop() {
         if (ipDisplayed) {
             ipDisplayed = false;
             mqttConfigured = false;
+            mqttConnected = false;  // 重置，以便 WiFi 重连后重新连接 MQTT
             vfd.clear();
             
             if (espWifi.isAPMode()) {

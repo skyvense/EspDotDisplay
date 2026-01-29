@@ -44,7 +44,7 @@ public:
     void println(String text);              // 打印String并换行
     
     // 光标控制
-    void setCursor(uint8_t x, uint8_t y);   // 设置光标位置
+    void setCursor(uint8_t x, uint8_t y);   // 设置光标位置（行列均为 1-based，内部转协议 0-based）
     void cursorOn();                        // 显示光标
     void cursorOff();                       // 隐藏光标
     

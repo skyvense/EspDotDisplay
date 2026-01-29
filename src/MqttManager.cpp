@@ -52,7 +52,8 @@ bool MqttManager::parseMqttUrl(const String& url)
     int colonIndex = temp.indexOf(':');
     if (colonIndex > 0) {
         mqtt_server_ = temp.substring(0, colonIndex);
-        mqtt_port_ = temp.substring(colonIndex + 1).toInt();
+        int port = temp.substring(colonIndex + 1).toInt();
+        mqtt_port_ = (port > 0 && port <= 65535) ? port : 1883;
     } else {
         mqtt_server_ = temp;
         mqtt_port_ = 1883;  // 默认端口

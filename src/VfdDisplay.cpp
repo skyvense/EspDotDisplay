@@ -96,12 +96,14 @@ void VfdDisplay::print(String text)
 
 void VfdDisplay::println(const char* text)
 {
+    if (!serial_) return;
     print(text);
     serial_->write(VFD_LINE_FEED);
 }
 
 void VfdDisplay::println(String text)
 {
+    if (!serial_) return;
     print(text);
     serial_->write(VFD_LINE_FEED);
 }
@@ -109,12 +111,14 @@ void VfdDisplay::println(String text)
 void VfdDisplay::setCursor(uint8_t x, uint8_t y)
 {
     if (!serial_) return;
-    // US $ x y - 设置光标位置 (US = 0x1F)
-    // x: 列号 (0-19), y: 行号
+    // US $ x y - 设置光标位置 (US = 0x1F)，协议为 0-based
+    // 入参使用 1-based（行/列从 1 开始），内部转为 0-based 再发送
+    uint8_t x0 = (x >= 1) ? (x - 1) : 0;
+    uint8_t y0 = (y >= 1) ? (y - 1) : 0;
     serial_->write(VFD_US);
     serial_->write('$');
-    serial_->write(x);
-    serial_->write(y);
+    serial_->write(x0);
+    serial_->write(y0);
 }
 
 void VfdDisplay::cursorOn()

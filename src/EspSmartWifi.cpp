@@ -350,7 +350,14 @@ String EspSmartWifi::httpGet(const String& path) {
         return "";
     }
 
-    String url = _config.Server + path + "?icon=https://support.arduino.cc/hc/article_attachments/12416033021852.png";
+    // 配置里的 Server 可能是 MQTT 地址，HTTP 请求需用 http(s)://
+    String base = _config.Server;
+    if (base.startsWith("mqtt://")) {
+        base = "http://" + base.substring(7);
+    } else if (base.startsWith("mqtts://")) {
+        base = "https://" + base.substring(8);
+    }
+    String url = base + path + "?icon=https://support.arduino.cc/hc/article_attachments/12416033021852.png";
     Serial_debug.print("HTTP GET: ");
     Serial_debug.println(url);
 
