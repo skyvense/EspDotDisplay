@@ -1,30 +1,60 @@
 #include <Arduino.h>
 #include "EspSmartWifi.h"
+#include "DisplayInterface.h"
 #include "VfdDisplay.h"
+#include "OledDisplay.h"
 #include "ConfigWebServer.h"
 #include "MqttManager.h"
 
+// ==================== 显示类型选择 ====================
+// 修改这里来切换显示类型
+// 选项: 1=VFD, 2=OLED
+#define DISPLAY_TYPE_VFD  1
+#define DISPLAY_TYPE_OLED 2
+
+// 选择显示类型（修改这一行）
+// #define DISPLAY_TYPE DISPLAY_TYPE_VFD
+#define DISPLAY_TYPE DISPLAY_TYPE_OLED
+// ====================================================
+
 // LED引脚定义 (根据你的硬件调整，-1表示不使用LED)
-// ESP32-C3-DevKitM-1 内置LED通常在GPIO8
-#define LED_PIN 8
+// ESP32-C3-DevKitM-1: 使用 GPIO 2 (避免与 OLED SDA 冲突)
+#define LED_PIN 2
 
 // VFD串口引脚定义 (ESP32-C3)
-// 控制信号接在GPIO 10 (TX)，接收可选
-#define VFD_RX_PIN -1        // 不使用RX（如果VFD只需要接收数据）
+#define VFD_RX_PIN -1        // 不使用RX
 #define VFD_TX_PIN 10        // VFD RX 连接到 ESP32 TX (GPIO 10)
 #define VFD_BAUD_RATE 9600   // VFD波特率 9600
+
+// OLED I2C引脚定义 (ESP32-C3)
+// 确认分辨率: 72x40 (0.42寸)
+#define OLED_WIDTH 72        // OLED 宽度（像素）
+#define OLED_HEIGHT 40       // OLED 高度（像素）
+#define OLED_SDA_PIN 5       // I2C SDA 引脚 (实际接线: GPIO 5)
+#define OLED_SCL_PIN 6       // I2C SCL 引脚 (实际接线: GPIO 6)
+#define OLED_I2C_ADDR 0x3C   // I2C 地址
 
 // WiFi管理对象
 EspSmartWifi espWifi(LED_PIN);
 
-// VFD显示屏对象
-VfdDisplay vfd(&Serial1, VFD_RX_PIN, VFD_TX_PIN, VFD_BAUD_RATE);
+// 显示对象（根据 DISPLAY_TYPE 选择）
+#if DISPLAY_TYPE == DISPLAY_TYPE_VFD
+    VfdDisplay displayDevice(&Serial1, VFD_RX_PIN, VFD_TX_PIN, VFD_BAUD_RATE);
+    #define DISPLAY_NAME "VFD"
+#elif DISPLAY_TYPE == DISPLAY_TYPE_OLED
+    OledDisplay displayDevice(OLED_WIDTH, OLED_HEIGHT, OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_ADDR);
+    #define DISPLAY_NAME "OLED"
+#else
+    #error "Invalid DISPLAY_TYPE! Must be DISPLAY_TYPE_VFD or DISPLAY_TYPE_OLED"
+#endif
+
+DisplayInterface* display = &displayDevice;
 
 // Web服务器对象
 ConfigWebServer webServer(&espWifi, 80);
 
 // MQTT管理对象
-MqttManager mqttManager(&vfd);
+MqttManager mqttManager(display);
 
 void setup() {
     // 初始化USB串口（用于调试）
@@ -32,23 +62,23 @@ void setup() {
     delay(1000);  // 等待串口稳定
     
     Serial.println("\n\n=================================");
-    Serial.println("ESP32-C3 VFD Display System");
+    Serial.printf("ESP32-C3 Display System (%s)\n", DISPLAY_NAME);
     Serial.println("with WebServer & MQTT");
     Serial.println("=================================\n");
     
-    // 初始化VFD显示屏
-    Serial.println("Initializing VFD Display...");
-    if (vfd.begin()) {
-        Serial.println("VFD Display initialized successfully");
+    // 初始化显示屏
+    Serial.printf("Initializing %s Display...\n", DISPLAY_NAME);
+    if (display->begin()) {
+        Serial.printf("%s Display initialized successfully\n", DISPLAY_NAME);
         
         // 显示欢迎信息
-        vfd.clear();
+        display->clear();
         delay(100);
-        vfd.println("ESP32-C3");
-        vfd.print("Starting...");
-        Serial.println("Displayed welcome message on VFD");
+        display->println("ESP32-C3");
+        display->print("Starting...");
+        Serial.println("Displayed welcome message on display");
     } else {
-        Serial.println("Failed to initialize VFD Display");
+        Serial.printf("Failed to initialize %s Display\n", DISPLAY_NAME);
     }
     
     // 初始化文件系统
@@ -63,9 +93,9 @@ void setup() {
     
     // 显示访问信息
     if (espWifi.isAPMode()) {
-        vfd.clear();
-        vfd.println("AP Mode");
-        vfd.print(WiFi.softAPIP().toString());
+        display->clear();
+        display->println("AP Mode");
+        display->print(WiFi.softAPIP().toString());
         Serial.println("AP Mode - Web interface available at: " + WiFi.softAPIP().toString());
     }
     
@@ -89,15 +119,15 @@ void loop() {
         if (!ipDisplayed) {
             ipDisplayed = true;
             
-            vfd.clear();
-            vfd.println("WiFi OK");
-            vfd.print(WiFi.localIP().toString());
+            display->clear();
+            display->println("WiFi OK");
+            display->print(WiFi.localIP().toString());
             
             Serial.println("WiFi Status: Connected");
             Serial.print("IP Address: ");
             Serial.println(WiFi.localIP());
             Serial.println("Web interface: http://" + WiFi.localIP().toString());
-            Serial.println("IP displayed on VFD");
+            Serial.println("IP displayed on display");
             
             delay(2000);  // 显示IP 2秒
         }
@@ -107,8 +137,8 @@ void loop() {
             Config config = espWifi.getConfig();
             if (config.Server.length() > 0 && config.Topic.length() > 0) {
                 Serial.println("Configuring MQTT...");
-                vfd.clear();
-                vfd.print("MQTT...");
+                display->clear();
+                display->print("MQTT...");
                 
                 if (mqttManager.configure(config.Server, config.Topic)) {
                     mqttConfigured = true;
@@ -127,9 +157,9 @@ void loop() {
             if (!mqttConnected && mqttManager.isConnected() == false) {
                 if (mqttManager.connect()) {
                     mqttConnected = true;
-                    vfd.clear();
-                    vfd.println("MQTT OK");
-                    vfd.print("Listening...");
+                    display->clear();
+                    display->println("MQTT OK");
+                    display->print("Listening...");
                     Serial.println("MQTT connected and subscribed");
                 }
             }
@@ -165,13 +195,13 @@ void loop() {
             ipDisplayed = false;
             mqttConfigured = false;
             mqttConnected = false;  // 重置，以便 WiFi 重连后重新连接 MQTT
-            vfd.clear();
+            display->clear();
             
             if (espWifi.isAPMode()) {
-                vfd.println("AP Mode");
-                vfd.print(WiFi.softAPIP().toString());
+                display->println("AP Mode");
+                display->print(WiFi.softAPIP().toString());
             } else {
-                vfd.print("WiFi...");
+                display->print("WiFi...");
             }
         }
     }

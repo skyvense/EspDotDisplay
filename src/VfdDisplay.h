@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include "DisplayInterface.h"
 
 // EPSON VFD 控制命令
 #define VFD_CLEAR_DISPLAY       0x0C    // 清屏
@@ -12,7 +13,7 @@
 #define VFD_ESC                 0x1B    // ESC控制字符
 #define VFD_US                  0x1F    // US控制字符
 
-class VfdDisplay
+class VfdDisplay : public DisplayInterface
 {
 private:
     HardwareSerial *serial_;

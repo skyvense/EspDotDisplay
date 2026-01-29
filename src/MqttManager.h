@@ -2,14 +2,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include "VfdDisplay.h"
+#include "DisplayInterface.h"
 
 class MqttManager
 {
 private:
     WiFiClient *wifi_client_;
     PubSubClient *mqtt_client_;
-    VfdDisplay *vfd_;
+    DisplayInterface *display_;
     
     String mqtt_server_;
     int mqtt_port_;
@@ -33,7 +33,7 @@ private:
     static MqttManager* instance_;
 
 public:
-    MqttManager(VfdDisplay *vfd);
+    MqttManager(DisplayInterface *display);
     ~MqttManager();
     
     // 配置MQTT

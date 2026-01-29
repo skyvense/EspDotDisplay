@@ -3,8 +3,8 @@
 // 静态成员初始化
 MqttManager* MqttManager::instance_ = nullptr;
 
-MqttManager::MqttManager(VfdDisplay *vfd)
-    : vfd_(vfd), connected_(false), last_reconnect_attempt_(0),
+MqttManager::MqttManager(DisplayInterface *display)
+    : display_(display), connected_(false), last_reconnect_attempt_(0),
       mqtt_port_(1883)
 {
     wifi_client_ = new WiFiClient();
@@ -205,7 +205,7 @@ void MqttManager::handleMessage(const String& topic, const String& message)
     Serial.printf("MQTT Message: [%s] %s\n", topic.c_str(), message.c_str());
     
     // 在VFD上显示消息
-    if (vfd_ && vfd_->isInitialized()) {
+    if (display_ && display_->isInitialized()) {
         // 静态变量：保存上次显示的内容
         static String lastLine1 = "";
         static String lastLine2 = "";
@@ -254,9 +254,9 @@ void MqttManager::handleMessage(const String& topic, const String& message)
         // 检查第一行是否变化
         if (line1 != lastLine1) {
             Serial.println("Line 1 changed, updating...");
-            vfd_->setCursor(1, 1);  // VFD坐标从1开始：列1，行1
+            display_->setCursor(1, 1);  // VFD坐标从1开始：列1，行1
             delay(10);
-            vfd_->print(line1);     // 打印整行
+            display_->print(line1);     // 打印整行
             lastLine1 = line1;
             needUpdate = true;
         }
@@ -264,9 +264,9 @@ void MqttManager::handleMessage(const String& topic, const String& message)
         // 检查第二行是否变化
         if (line2 != lastLine2) {
             Serial.println("Line 2 changed, updating...");
-            vfd_->setCursor(1, 2);  // VFD坐标从1开始：列1，行2
+            display_->setCursor(1, 2);  // VFD坐标从1开始：列1，行2
             delay(10);
-            vfd_->print(line2);     // 打印整行
+            display_->print(line2);     // 打印整行
             lastLine2 = line2;
             needUpdate = true;
         }
