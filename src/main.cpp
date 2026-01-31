@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "EspSmartWifi.h"
 #include "DisplayInterface.h"
 #include "VfdDisplay.h"
@@ -14,7 +15,7 @@
 
 // 选择显示类型（修改这一行）
 // #define DISPLAY_TYPE DISPLAY_TYPE_VFD
-#define DISPLAY_TYPE DISPLAY_TYPE_OLED
+#define DISPLAY_TYPE DISPLAY_TYPE_VFD
 // ====================================================
 
 // LED引脚定义 (根据你的硬件调整，-1表示不使用LED)
@@ -25,6 +26,8 @@
 #define VFD_RX_PIN -1        // 不使用RX
 #define VFD_TX_PIN 10        // VFD RX 连接到 ESP32 TX (GPIO 10)
 #define VFD_BAUD_RATE 9600   // VFD波特率 9600
+#define VFD_OFFSET_X 0       // VFD 列偏移（可正可负）
+#define VFD_OFFSET_Y 0       // VFD 行偏移（可正可负）
 
 // OLED I2C引脚定义 (ESP32-C3)
 // 确认分辨率: 72x40 (0.42寸)
@@ -33,16 +36,18 @@
 #define OLED_SDA_PIN 5       // I2C SDA 引脚 (实际接线: GPIO 5)
 #define OLED_SCL_PIN 6       // I2C SCL 引脚 (实际接线: GPIO 6)
 #define OLED_I2C_ADDR 0x3C   // I2C 地址
+#define OLED_OFFSET_X 0      // OLED 水平偏移（像素，可正可负）
+#define OLED_OFFSET_Y 0      // OLED 垂直偏移（像素，可正可负）
 
 // WiFi管理对象
 EspSmartWifi espWifi(LED_PIN);
 
 // 显示对象（根据 DISPLAY_TYPE 选择）
 #if DISPLAY_TYPE == DISPLAY_TYPE_VFD
-    VfdDisplay displayDevice(&Serial1, VFD_RX_PIN, VFD_TX_PIN, VFD_BAUD_RATE);
+    VfdDisplay displayDevice(&Serial1, VFD_RX_PIN, VFD_TX_PIN, VFD_BAUD_RATE, VFD_OFFSET_X, VFD_OFFSET_Y);
     #define DISPLAY_NAME "VFD"
 #elif DISPLAY_TYPE == DISPLAY_TYPE_OLED
-    OledDisplay displayDevice(OLED_WIDTH, OLED_HEIGHT, OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_ADDR);
+    OledDisplay displayDevice(OLED_WIDTH, OLED_HEIGHT, OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_ADDR, OLED_OFFSET_X, OLED_OFFSET_Y);
     #define DISPLAY_NAME "OLED"
 #else
     #error "Invalid DISPLAY_TYPE! Must be DISPLAY_TYPE_VFD or DISPLAY_TYPE_OLED"

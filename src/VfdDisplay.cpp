@@ -1,7 +1,13 @@
 #include "VfdDisplay.h"
 
-VfdDisplay::VfdDisplay(HardwareSerial *serial, int rx_pin, int tx_pin, int baud_rate)
-    : serial_(serial), rx_pin_(rx_pin), tx_pin_(tx_pin), baud_rate_(baud_rate), initialized_(false)
+VfdDisplay::VfdDisplay(HardwareSerial *serial, int rx_pin, int tx_pin, int baud_rate, int offset_x, int offset_y)
+    : serial_(serial),
+      rx_pin_(rx_pin),
+      tx_pin_(tx_pin),
+      baud_rate_(baud_rate),
+      initialized_(false),
+      offset_x_(offset_x),
+      offset_y_(offset_y)
 {
 }
 
@@ -111,14 +117,20 @@ void VfdDisplay::println(String text)
 void VfdDisplay::setCursor(uint8_t x, uint8_t y)
 {
     if (!serial_) return;
-    // US $ x y - 设置光标位置 (US = 0x1F)，协议为 0-based
-    // 入参使用 1-based（行/列从 1 开始），内部转为 0-based 再发送
-    uint8_t x0 = (x >= 1) ? (x - 1) : 0;
-    uint8_t y0 = (y >= 1) ? (y - 1) : 0;
+    // US $ x y - 设置光标位置 (US = 0x1F)
+    // 入参使用 1-based（行/列从 1 开始），直接发送给设备
+    int x0 = static_cast<int>(x);
+    int y0 = static_cast<int>(y);
+    x0 += offset_x_;
+    y0 += offset_y_;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x0 > 255) x0 = 255;
+    if (y0 > 255) y0 = 255;
     serial_->write(VFD_US);
     serial_->write('$');
-    serial_->write(x0);
-    serial_->write(y0);
+    serial_->write(static_cast<uint8_t>(x0));
+    serial_->write(static_cast<uint8_t>(y0));
 }
 
 void VfdDisplay::cursorOn()

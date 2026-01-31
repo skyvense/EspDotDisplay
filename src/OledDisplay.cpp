@@ -1,8 +1,9 @@
 #include "OledDisplay.h"
 
-OledDisplay::OledDisplay(int width, int height, int sda_pin, int scl_pin, uint8_t i2c_addr)
-    : width_(width), height_(height), sda_pin_(sda_pin), scl_pin_(scl_pin), 
+OledDisplay::OledDisplay(int width, int height, int sda_pin, int scl_pin, uint8_t i2c_addr, int offset_x, int offset_y)
+    : width_(width), height_(height), sda_pin_(sda_pin), scl_pin_(scl_pin),
       i2c_addr_(i2c_addr), initialized_(false), display_(nullptr),
+      offset_x_(offset_x), offset_y_(offset_y),
       cursor_x_(0), cursor_y_(0), line_height_(10)
 {
 }
@@ -18,8 +19,8 @@ OledDisplay::~OledDisplay()
 bool OledDisplay::begin()
 {
     Serial.println("=== OLED Display Initialization (U8g2) ===");
-    Serial.printf("Configuration: %dx%d, SDA=%d, SCL=%d, I2C=0x%02X\n", 
-                  width_, height_, sda_pin_, scl_pin_, i2c_addr_);
+    Serial.printf("Configuration: %dx%d, SDA=%d, SCL=%d, I2C=0x%02X, Offset=(%d,%d)\n",
+                  width_, height_, sda_pin_, scl_pin_, i2c_addr_, offset_x_, offset_y_);
     
     // 初始化 I2C
     Wire.begin(sda_pin_, scl_pin_);
@@ -72,7 +73,7 @@ void OledDisplay::print(const char* text)
 {
     if (!display_ || !text) return;
     
-    display_->drawStr(cursor_x_, cursor_y_ + line_height_, text);
+    display_->drawStr(cursor_x_ + offset_x_, cursor_y_ + line_height_ + offset_y_, text);
     display_->sendBuffer();
     
     // 更新光标位置
@@ -88,7 +89,7 @@ void OledDisplay::println(const char* text)
 {
     if (!display_ || !text) return;
     
-    display_->drawStr(cursor_x_, cursor_y_ + line_height_, text);
+    display_->drawStr(cursor_x_ + offset_x_, cursor_y_ + line_height_ + offset_y_, text);
     display_->sendBuffer();
     
     // 换行
@@ -139,7 +140,7 @@ void OledDisplay::test()
     // 测试 1: 绘制边框
     Serial.println("  - Drawing border");
     display_->clearBuffer();
-    display_->drawFrame(0, 0, width_, height_);
+    display_->drawFrame(offset_x_, offset_y_, width_, height_);
     display_->sendBuffer();
     delay(1500);
     
@@ -147,15 +148,15 @@ void OledDisplay::test()
     Serial.println("  - Displaying text");
     display_->clearBuffer();
     display_->setFont(u8g2_font_6x10_tf);
-    display_->drawStr(0, 10, "72x40");
-    display_->drawStr(0, 20, "U8g2 OK");
+    display_->drawStr(offset_x_, offset_y_ + 10, "72x40");
+    display_->drawStr(offset_x_, offset_y_ + 20, "U8g2 OK");
     display_->sendBuffer();
     delay(2000);
     
     // 测试 3: 全屏填充
     Serial.println("  - Fill screen");
     display_->clearBuffer();
-    display_->drawBox(0, 0, width_, height_);
+    display_->drawBox(offset_x_, offset_y_, width_, height_);
     display_->sendBuffer();
     delay(500);
     

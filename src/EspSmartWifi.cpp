@@ -2,11 +2,49 @@
 #include <ArduinoJson.h>
 #include <FS.h>
 #include <SPIFFS.h>
+#include <esp_wifi.h>
 #include "EspSmartWifi.h"
 
 void reset() 
 { 
     ESP.restart();
+}
+
+static void logCountryInfo() {
+    wifi_country_t country;
+    if (esp_wifi_get_country(&country) == ESP_OK) {
+        Serial_debug.printf("WiFi country: %c%c, schan=%d, nchan=%d, policy=%d\n",
+                            country.cc[0], country.cc[1], country.schan, country.nchan, country.policy);
+    } else {
+        Serial_debug.println("WiFi country: failed to read");
+    }
+}
+
+static void logScanResults(const String& targetSsid) {
+    Serial_debug.println("Scanning nearby APs...");
+    int n = WiFi.scanNetworks(false, true);
+    Serial_debug.printf("Scan done: %d networks\n", n);
+    if (n <= 0) {
+        return;
+    }
+
+    int limit = n > 12 ? 12 : n;
+    for (int i = 0; i < limit; i++) {
+        String ssid = WiFi.SSID(i);
+        int rssi = WiFi.RSSI(i);
+        int chan = WiFi.channel(i);
+        bool hidden = ssid.length() == 0;
+        bool match = (!targetSsid.isEmpty() && ssid == targetSsid);
+
+        Serial_debug.printf("  [%d] %s%s RSSI=%d dBm CH=%d ENC=%d%s\n",
+                            i,
+                            hidden ? "<hidden>" : ssid.c_str(),
+                            match ? " (target)" : "",
+                            rssi,
+                            chan,
+                            WiFi.encryptionType(i),
+                            hidden ? " [hidden]" : "");
+    }
 }
 
 // LED闪烁实现
@@ -183,9 +221,20 @@ void EspSmartWifi::syncRelayStates() {
 
 void EspSmartWifi::BaseConfig()
 {
+    // 设置中国的WiFi国家代码
+    esp_wifi_set_country_code("CN", true);
+    Serial_debug.println("WiFi country code set to: CN");
+
+    // 提高发射功率（最大 19.5 dBm = 78 * 0.25 dBm）
+    esp_wifi_set_max_tx_power(78);
+    Serial_debug.println("WiFi TX power set to max (19.5 dBm)");
+    
     // 尝试连接WiFi
-  WiFi.mode(WIFI_STA);    
-  WiFi.begin(_config.SSID.c_str(), _config.Passwd.c_str());
+    WiFi.mode(WIFI_STA);
+    delay(100);
+    logCountryInfo();
+    logScanResults(_config.SSID);
+    WiFi.begin(_config.SSID.c_str(), _config.Passwd.c_str());
     
     // 等待连接，最多等待10秒
     int waitCount = 0;
@@ -215,13 +264,30 @@ void EspSmartWifi::StartAPMode()
 
     Serial_debug.println("Starting AP mode...");
     
+    // 设置中国的WiFi国家代码（重要！）
+    esp_wifi_set_country_code("CN", true);
+    Serial_debug.println("WiFi country code set to: CN");
+
+    // 提高发射功率（最大 19.5 dBm = 78 * 0.25 dBm）
+    esp_wifi_set_max_tx_power(78);
+    Serial_debug.println("WiFi TX power set to max (19.5 dBm)");
+    
     // 创建唯一的AP名称 (ESP32-C3使用MAC地址)
     uint64_t chipid = ESP.getEfuseMac();
     String apName = "ESP_Config_" + String((uint32_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
     
+    Serial_debug.print("AP SSID: ");
+    Serial_debug.println(apName);
+    
+    // 先断开所有连接
+    WiFi.disconnect(true);
+    delay(100);
+    
     // 配置AP模式
     WiFi.mode(WIFI_AP);
-    WiFi.softAP(apName.c_str(), "12345678", 6);  // 使用固定的密码
+    delay(100);
+    
+    WiFi.softAP(apName.c_str(), "12345678", 11);  // 使用固定的密码
     
     Serial_debug.print("AP started with SSID: ");
     Serial_debug.println(apName);
@@ -247,6 +313,9 @@ void EspSmartWifi::TryConnectWifi() {
     Serial_debug.println(_config.SSID);
     Serial_debug.print("Password: ");
     Serial_debug.println(_config.Passwd);
+    
+    // 设置中国的WiFi国家代码
+    esp_wifi_set_country_code("CN", true);
     
     WiFi.mode(WIFI_STA);
     WiFi.begin(_config.SSID.c_str(), _config.Passwd.c_str());

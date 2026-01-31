@@ -206,6 +206,22 @@ void MqttManager::handleMessage(const String& topic, const String& message)
     
     // 在VFD上显示消息
     if (display_ && display_->isInitialized()) {
+        auto sanitizeLine = [](const String& input, int maxLen) -> String {
+            String out = "";
+            out.reserve(maxLen);
+            for (int i = 0; i < input.length() && out.length() < maxLen; i++) {
+                char c = input[i];
+                if (c == '\r' || c == '\n' || c == '\t') {
+                    out += ' ';
+                } else if (static_cast<uint8_t>(c) < 0x20) {
+                    out += ' ';
+                } else {
+                    out += c;
+                }
+            }
+            return out;
+        };
+
         // 静态变量：保存上次显示的内容
         static String lastLine1 = "";
         static String lastLine2 = "";
@@ -240,6 +256,10 @@ void MqttManager::handleMessage(const String& topic, const String& message)
             }
         }
         
+        // 清理控制字符（避免换行/回车导致光标偏移）
+        line1 = sanitizeLine(line1, maxLineLength);
+        line2 = sanitizeLine(line2, maxLineLength);
+
         // 补齐到maxLineLength字符（避免残留旧内容）
         while (line1.length() < maxLineLength) {
             line1 += " ";

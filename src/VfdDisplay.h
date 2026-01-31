@@ -21,6 +21,8 @@ private:
     int tx_pin_;
     int baud_rate_;
     bool initialized_;
+    int offset_x_;
+    int offset_y_;
 
     // 发送ESC命令
     void sendEscCommand(uint8_t cmd);
@@ -30,7 +32,12 @@ private:
     void sendEscCommand(uint8_t cmd, const uint8_t* params, size_t len);
 
 public:
-    VfdDisplay(HardwareSerial *serial = &Serial1, int rx_pin = 18, int tx_pin = 19, int baud_rate = 9600);
+    VfdDisplay(HardwareSerial *serial = &Serial1,
+               int rx_pin = 18,
+               int tx_pin = 19,
+               int baud_rate = 9600,
+               int offset_x = 0,
+               int offset_y = 0);
     ~VfdDisplay();
 
     // 初始化VFD

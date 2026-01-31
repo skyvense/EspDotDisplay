@@ -13,13 +13,15 @@
 class OledDisplay : public DisplayInterface
 {
 private:
-    U8G2_SSD1306_72X40_ER_F_HW_I2C *display_;
+    U8G2 *display_;
     int sda_pin_;
     int scl_pin_;
     int width_;
     int height_;
     uint8_t i2c_addr_;
     bool initialized_;
+    int offset_x_;
+    int offset_y_;
     
     int cursor_x_;
     int cursor_y_;
@@ -34,7 +36,13 @@ public:
      * @param scl_pin SCL 引脚
      * @param i2c_addr I2C 地址（默认 0x3C）
      */
-    OledDisplay(int width = 72, int height = 40, int sda_pin = 5, int scl_pin = 6, uint8_t i2c_addr = 0x3C);
+    OledDisplay(int width = 72,
+                int height = 40,
+                int sda_pin = 5,
+                int scl_pin = 6,
+                uint8_t i2c_addr = 0x3C,
+                int offset_x = 0,
+                int offset_y = 0);
     
     ~OledDisplay();
     
