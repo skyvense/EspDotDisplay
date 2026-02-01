@@ -13,11 +13,14 @@ private:
     // 网页HTML
     String getIndexPage();
     String getConfigPage();
+    String getUpdatePage();
     String getSuccessPage();
     
     // 路由处理函数
     void handleRoot();
     void handleConfig();
+    void handleUpdate();
+    void handleUpdateUpload();
     void handleSave();
     void handleStatus();
     void handleNotFound();

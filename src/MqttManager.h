@@ -2,14 +2,17 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include "DisplayInterface.h"
+#include <functional>
 
 class MqttManager
 {
+public:
+    using MessageCallback = std::function<void(const String& topic, const String& message)>;
+
 private:
     WiFiClient *wifi_client_;
     PubSubClient *mqtt_client_;
-    DisplayInterface *display_;
+    MessageCallback onMessage_;
     
     String mqtt_server_;
     int mqtt_port_;
@@ -33,9 +36,12 @@ private:
     static MqttManager* instance_;
 
 public:
-    MqttManager(DisplayInterface *display);
+    MqttManager();
     ~MqttManager();
     
+    // 设置消息回调
+    void setMessageCallback(MessageCallback callback) { onMessage_ = callback; }
+
     // 配置MQTT
     bool configure(const String& server, const String& topic);
     

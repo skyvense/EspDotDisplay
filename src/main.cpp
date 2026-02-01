@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ArduinoOTA.h>
 #include "EspSmartWifi.h"
 #include "DisplayInterface.h"
 #include "VfdDisplay.h"
@@ -59,7 +60,102 @@ DisplayInterface* display = &displayDevice;
 ConfigWebServer webServer(&espWifi, 80);
 
 // MQTT管理对象
-MqttManager mqttManager(display);
+MqttManager mqttManager;
+
+void onMqttMessage(const String& topic, const String& message) {
+    if (display && display->isInitialized()) {
+        auto sanitizeLine = [](const String& input, int maxLen) -> String {
+            String out = "";
+            out.reserve(maxLen);
+            for (int i = 0; i < input.length() && out.length() < maxLen; i++) {
+                char c = input[i];
+                if (c == '\r' || c == '\n' || c == '\t') {
+                    out += ' ';
+                } else if (static_cast<uint8_t>(c) < 0x20) {
+                    out += ' ';
+                } else {
+                    out += c;
+                }
+            }
+            return out;
+        };
+
+        // 静态变量：保存上次显示的内容
+        static String lastLine1 = "";
+        static String lastLine2 = "";
+        
+        // 处理消息中的换行符
+        String displayMessage = message;
+        
+        // 替换竖线为换行符
+        for (int i = 0; i < displayMessage.length(); i++) {
+            if (displayMessage[i] == '|') {
+                displayMessage.setCharAt(i, '\n');
+            }
+        }
+        
+        // 分割为两行（VFD每行20字符）
+        const int maxLineLength = 20;
+        String line1 = "";
+        String line2 = "";
+        
+        int newlinePos = displayMessage.indexOf('\n');
+        if (newlinePos == -1) {
+            // 没有换行符，整个消息作为第一行（可能自动换行）
+            line1 = displayMessage.substring(0, min(maxLineLength, (int)displayMessage.length()));
+            if (displayMessage.length() > maxLineLength) {
+                line2 = displayMessage.substring(maxLineLength, min(maxLineLength * 2, (int)displayMessage.length()));
+            }
+        } else {
+            // 有换行符，分别处理两行
+            line1 = displayMessage.substring(0, min(newlinePos, maxLineLength));
+            if (newlinePos + 1 < displayMessage.length()) {
+                line2 = displayMessage.substring(newlinePos + 1, min(newlinePos + 1 + maxLineLength, (int)displayMessage.length()));
+            }
+        }
+        
+        // 清理控制字符（避免换行/回车导致光标偏移）
+        line1 = sanitizeLine(line1, maxLineLength);
+        line2 = sanitizeLine(line2, maxLineLength);
+
+        // 补齐到maxLineLength字符（避免残留旧内容）
+        while (line1.length() < maxLineLength) {
+            line1 += " ";
+        }
+        while (line2.length() < maxLineLength) {
+            line2 += " ";
+        }
+        
+        // 只更新变化的行
+        bool needUpdate = false;
+        
+        // 检查第一行是否变化
+        if (line1 != lastLine1) {
+            Serial.println("Line 1 changed, updating...");
+            display->setCursor(1, 1);  // VFD坐标从1开始：列1，行1
+            delay(10);
+            display->print(line1);     // 打印整行
+            lastLine1 = line1;
+            needUpdate = true;
+        }
+        
+        // 检查第二行是否变化
+        if (line2 != lastLine2) {
+            Serial.println("Line 2 changed, updating...");
+            display->setCursor(1, 2);  // VFD坐标从1开始：列1，行2
+            delay(10);
+            display->print(line2);     // 打印整行
+            lastLine2 = line2;
+            needUpdate = true;
+        }
+        
+        if (needUpdate) {
+            Serial.println("Message updated on display");
+        } else {
+            Serial.println("Message unchanged, skipped update");
+        }
+    }
+}
 
 void setup() {
     // 初始化USB串口（用于调试）
@@ -70,6 +166,9 @@ void setup() {
     Serial.printf("ESP32-C3 Display System (%s)\n", DISPLAY_NAME);
     Serial.println("with WebServer & MQTT");
     Serial.println("=================================\n");
+
+    // 配置MQTT回调
+    mqttManager.setMessageCallback(onMqttMessage);
     
     // 初始化显示屏
     Serial.printf("Initializing %s Display...\n", DISPLAY_NAME);
@@ -108,6 +207,7 @@ void setup() {
 }
 
 void loop() {
+    ArduinoOTA.handle();
     // 处理Web服务器请求
     webServer.handleClient();
     
